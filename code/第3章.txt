@@ -1,0 +1,275 @@
+// ######################################################################
+// 
+// 《Neo4j图数据库扩展指南》
+// 
+// 代码示例 - 第3章
+//
+// 作者：俞方桦，https://www.linkedin.com/in/joshuayu/
+// 最后修改日期：2019-12-29
+// 
+// ###################################################################### 
+
+// #########################################################################
+// 
+// 3.2节
+
+// -------------------------------
+// 
+// 创建2个有环图
+
+CREATE (a:Node{name:'A'})
+CREATE (b:Node{name:'B'})
+CREATE (c:Node{name:'C'})
+CREATE (d:Node{name:'D'})
+CREATE (e:Node{name:'E'})
+CREATE (f:Node{name:'F'})
+CREATE (a) -[:HAS]-> (b)
+CREATE (b) -[:HAS]-> (c)
+CREATE (c) -[:HAS]-> (a)
+CREATE (a) -[:HAS]-> (c)
+CREATE (c) -[:HAS]-> (b)
+CREATE (b) -[:HAS]-> (a)
+CREATE (d) -[:HAS]-> (e)
+CREATE (e) -[:HAS]-> (f)
+CREATE (f) -[:HAS]-> (d)
+
+
+// -------------------------------
+// 3.2(1) 查询从节点A出发的1度关系节点。不考虑关系的方向
+//  返回结果：A-B 2条路径，A-C 2条路径，共4条。
+ 
+MATCH path=(p:Node{name:'A'})-[*1]-()
+RETURN nodes(path) AS nodes,  count(*) AS count
+
+// 3.2(2) 查询从节点D出发的1度关系节点。不考虑关系的方向
+//  返回结果：D-E 1条路径，D-F 1条路径，共2条。
+ 
+MATCH path=(p:Node{name:'D'})-[*1]-()
+RETURN nodes(path) AS nodes,  count(*) AS count
+
+// 3.2(3) 查询从节点A出发的2度关系节点。不考虑关系的方向
+ 
+MATCH path=(p:Node{name:'A'})-[*2]-()
+WITH nodes(path) AS nodes,  count(*) AS count
+RETURN extract(n IN nodes | n.name) AS names, count
+
+// 3.2(4) 查询从节点D出发的2度关系节点。不考虑关系的方向
+ 
+MATCH path=(p:Node{name:'D'})-[*2]-()
+RETURN nodes(path) AS nodes,  count(*) AS count
+
+
+// 3.2(5) 使用APOC路径扩展过程查询从节点A出发的2度关系节点。不考虑关系的方向。
+//          唯一性判断：RELATIONSHIP_PATH，与Cypher的缺省方式一样。
+//          结果与3.2(3)一致。
+ 
+MATCH (n:Node{name:'A'})
+CALL apoc.path.expandConfig(n, {
+     minLevel: 2
+    ,maxLevel: 2
+    ,uniqueness: 'RELATIONSHIP_PATH'
+  }
+) YIELD path
+WITH nodes(path) AS nodes,  count(*) AS count
+RETURN extract(n IN nodes | n.name) AS names, count
+
+// 3.2(6) 使用APOC路径扩展过程查询从节点A出发的2度关系节点。不考虑关系的方向。
+//          唯一性判断：NODE_PATH，从开始节点到终止节点的路径唯一。
+
+MATCH (n:Node{name:'A'})
+CALL apoc.path.expandConfig(n, {
+     minLevel: 2
+    ,maxLevel: 2
+    ,uniqueness: 'NODE_PATH'
+  }
+) YIELD path
+WITH nodes(path) AS nodes,  count(*) AS count
+RETURN extract(n IN nodes | n.name) AS names, count
+
+// 3.2(7) 使用APOC路径扩展过程查询从节点A出发的N度关系节点。不考虑关系的方向。
+//          唯一性判断：NODE_GLOBAL，每个节点仅需访问一次。
+//          因为图中只有3个节点A-B-C、而且A可以到达B和C，因此只有2条路径返回。
+
+MATCH (n:Node{name:'A'})
+CALL apoc.path.expandConfig(n, {
+     minLevel: 1
+    ,maxLevel: 1
+    ,uniqueness: 'NODE_GLOBAL'
+  }
+) YIELD path
+WITH nodes(path) AS nodes,  count(*) AS count
+RETURN extract(n IN nodes | n.name) AS names, count
+
+
+// 3.2(8) 使用APOC路径扩展过程查询从节点A出发的N度关系节点。不考虑关系的方向。
+//          唯一性判断：RELATIONSHIP_GLOBAL，每个关系只访问一次。
+
+MATCH (n:Node{name:'A'})
+CALL apoc.path.expandConfig(n, {
+     minLevel: 1
+    ,maxLevel: -1
+    ,direction: 'BOTH'
+    ,uniqueness: 'RELATIONSHIP_GLOBAL'
+  }
+) YIELD path
+WITH nodes(path) AS nodes,  count(*) AS count
+RETURN extract(n IN nodes | n.name) AS names, count
+
+
+
+// #########################################################################
+// 
+// 3.3节
+
+// 3.3(A) 创建三国人物关系图
+CREATE (n1:`人物`:`皇帝`:`文臣`:`武将` {name: '刘备'}) 
+            -[:兄长]-> (n2:`人物`:`武将` {name: '关羽'}),
+       (n2) -[:兄长]-> (n3:`人物`:`武将` {name: '张飞'}),
+       (n1) -[:兄长]-> (n3),
+       (n1) -[:主公]-> (n4:`人物`:`武将` {name: '赵云'}),
+       (n1) -[:父子]-> (n5:`人物`:`皇帝`:`文臣` {name: '刘禅'}),
+	(n1) -[:主公]-> (n6:`人物`:`文臣` {name: '诸葛亮'}),
+	(n5) -[:主公]-> (n4),
+	(n5) -[:主公]-> (n6),
+	(a1:`朝代`{name:'蜀汉'}) -[:对手]-> (a2:`朝代`{name:'曹魏'}),
+	(a3:`朝代`{name:'西晋'}) -[:取代]-> (a2),
+	(m1:`人物`:`文臣` {name: '曹操'}) 
+            -[:父子]-> (m2:`人物`:`文臣`:`皇帝` {name: '曹丕'}),
+	(m1) -[:父子]-> (m3:`人物`:`文臣` {name: '曹植'}),
+       (m2) -[:兄长]-> (m3),
+	(m1) -[:主公]-> (m4:`人物`:`文臣` {name: '司马懿'}),
+	(m4) -[:父子]-> (m5:`人物`:`文臣` {name: '司马昭'}),
+	(m5) -[:父子]-> (m6:`人物`:`文臣`:`皇帝` {name: '司马炎'}),
+	(n1) -[:建立{year:221}]-> (a1),
+	(m2) -[:建立{year:220}]-> (a2),
+	(m6) -[:建立{year:266}]-> (a3)
+
+
+// 3.3(1) 调用基本路径扩展过程，从“蜀汉”节点出发遍历图。
+//  参数：- startNode:代表“蜀汉”的节点 
+//        - relationshipFilter: NULL
+//        - labelFilter: NULL
+//        - minLevel: 0
+//        - maxLevel: -1，遍历直到返回能够到达的所有路径
+//  返回结果：所有170条路径、15个节点、19个关系。   
+MATCH (n:朝代{name:'蜀汉'})
+CALL apoc.path.expand(n,NULL,NULL,0,-1) YIELD path
+RETURN path
+
+// 3.3(2) 调用基本路径扩展过程，从“蜀汉”节点出发遍历图。
+//  参数：- startNode:代表“蜀汉”的节点 
+//        - relationshipFilter: NULL
+//        - labelFilter: -朝代，即遍历到其他“朝代”节点终止。
+//        - minLevel: 0
+//        - maxLevel: -1，遍历直到返回能够到达的所有路径
+//  返回结果：蜀汉的所有人物。    
+MATCH (n:朝代{name:'蜀汉'})
+CALL apoc.path.expand(n,NULL,'-朝代',0,-1) YIELD path
+RETURN path
+	
+
+// 3.3(3) 调用基本路径扩展过程，从“蜀汉”节点出发遍历图。
+//  参数：- startNode:代表“蜀汉”的节点 
+//        - relationshipFilter: NULL
+//        - labelFilter: +皇帝|朝代
+//        - minLevel: 0
+//        - maxLevel: -1，遍历直到返回能够到达的所有路径
+//  返回结果：三国时期的所有朝代及其皇帝。    
+MATCH (n:朝代{name:'蜀汉'})
+CALL apoc.path.expand(n,NULL, '+皇帝|朝代',0,-1) YIELD path
+RETURN path
+
+
+// 3.3(4) 调用基本路径扩展过程，从人物节点出发遍历图。
+//  参数：- startNode:代表“蜀汉”的节点 
+//        - relationshipFilter: 父子>
+//        - labelFilter: +皇帝
+//        - minLevel: 0
+//        - maxLevel: -1，遍历直到返回能够到达的所有路径
+//  返回结果：三国时期的所有朝代、皇帝及其父子关系。    
+MATCH (p:人物) -[:建立]-> (n:朝代)
+WITH p
+CALL apoc.path.expand(p,'父子>','+皇帝',0,-1) YIELD path
+RETURN path
+
+// #########################################################################
+// 
+// 3.4节
+
+
+// 3.4(1) 调用可配置的路径扩展过程，寻找三国时期有谁自己没当皇帝、
+//          但是他的儿子当了皇帝的。
+//  参数：- startNode:代表“朝代”的节点 
+//        - sequece: '朝代,<建立,皇帝,父子,-皇帝|人物'
+//        - maxLevel: -1，遍历直到返回能够到达的所有路径
+//  返回结果：曹操，司马昭  
+MATCH (n:朝代)
+WITH n
+CALL apoc.path.expandConfig(n, 
+    { maxLevel: -1,
+      sequence: '朝代,<建立,皇帝,父子,-皇帝|人物'
+    }
+) YIELD path
+RETURN path
+
+
+// 3.4(2) 调用可配置的路径扩展过程，寻找三国时期为各国效力的文臣。
+//
+//  参数：- startNode:代表“朝代”的节点 
+//        - relationshipFilter: '<建立|父子|主公>'
+//      - labelFilter: '+人物|>文臣'
+//        - maxLevel: -1，遍历直到返回能够到达的所有路径
+//  返回结果：排除既是“文臣”又是“皇帝”的人物。
+MATCH (n:朝代)
+WITH n
+CALL apoc.path.expandConfig(n, 
+    { maxLevel: -1,
+      relationshipFilter: '<建立|父子|主公>',
+      labelFilter: '+人物|>文臣'
+    }
+) YIELD path
+WITH nodes(path) AS nodes
+WHERE NOT '皇帝' IN labels(nodes[-1])
+RETURN nodes[0].name AS kingdom, nodes[-1].name AS advisor
+
+
+// #########################################################################
+// 
+// 3.5节
+
+// 3.5(1) 搜索子图，从“蜀汉”节点出发寻找2-度邻居。
+//  参数：- startNode:代表“蜀汉”的节点 
+//        - relationshipFilter: NULL
+//        - labelFilter: NULL
+//        - maxLevel: 2，遍历直到返回能够到达的所有的节点
+//  返回结果：10个节点
+MATCH (n:朝代{name:'蜀汉'})
+CALL apoc.path.subgraphNodes(n,
+    { relationshipFilter: NULL,
+      labelFilter: NULL,
+      maxLevel: 2}) 
+YIELD node
+RETURN node
+
+
+// 3.5(2) 搜索子图，从“蜀汉”节点出发寻找2-度邻居。
+//  参数：- startNode:代表“蜀汉”的节点 
+//        - relationshipFilter: NULL
+//        - labelFilter: NULL
+//        - maxLevel: 2，遍历直到返回能够到达的所有的节点和关系
+//  返回结果：10个节点、12个关系，提取关系的开始和结束节点
+MATCH (n:朝代{name:'蜀汉'})
+CALL apoc.path.subgraphAll(n,
+    { relationshipFilter: NULL,
+      labelFilter: NULL,
+      maxLevel: 2}) 
+YIELD nodes, relationships
+UNWIND relationships AS r
+RETURN startNode(r).name AS fromNode, 
+       endNode(r).name AS toNode, 
+       type(r) AS relType
+
+
+	   
+	   
+
