@@ -1,0 +1,171 @@
+// ######################################################################
+// 
+// 《Neo4j图数据库扩展指南》
+// 
+// 代码示例 - 第10章
+// 
+// 作者：俞方桦，https://www.linkedin.com/in/joshuayu/
+// 最后修改日期：2019-12-29
+//
+// ###################################################################### 
+
+
+// #########################################################################
+// 
+// 10.1节
+
+
+// 10.1(1) 搜索从天津到石家庄的最短距离。
+//         搜索范围为子图，且不包含G3公路；使用关系上的cost属性计算成本。
+
+MATCH (start:城市{name:'天津'}),(end:城市{name:'石家庄'})
+CALL algo.shortestPath.stream(start, end
+        ,'cost'
+        ,{ nodeQuery: 'MATCH (n:城市) RETURN id(n) AS id',
+           relationshipQuery:'MATCH (n:城市) -[r:公路连接]- (m) WHERE id(m) <> id(n) AND r.line <> \'G3\' RETURN id(n) AS source, id(m) AS target, r.cost AS weight ORDER BY id(n) ASC, id(m) ASC',
+         direction:'BOTH',
+         graph:'cypher'
+      }) YIELD nodeId, cost
+RETURN algo.getNodeById(nodeId).name as station,cost
+
+
+// 10.3(1) 搜索从天津到石家庄的最短路径，规则：
+//         - 成本最低
+//         - 仅搜索公路
+//         - 包含两个方向
+//         - 返回结果
+
+MATCH (start:城市{name:'天津'}),(end:城市{name:'石家庄'})
+CALL algo.shortestPath.stream(start, end, NULL, 
+	{  relationshipQuery:'公路连接'
+        ,direction:'BOTH'
+     	}
+)
+YIELD nodeId, cost
+WITH nodeId, cost
+RETURN algo.getNodeById(nodeId).name AS city
+
+
+// 10.3(2) 计算两个城市之间的最短路径：
+//   - 成本最低
+//   - 不能使用公路G3
+//   - 使用Cypher得到子图投影(projection）
+//   - 使用ALGO过程
+
+MATCH (start:城市{name:'天津'}),(end:城市{name:'石家庄'})
+CALL algo.shortestPath.stream(start, end
+        ,'cost'
+        ,{ nodeQuery: 'MATCH (n:城市) RETURN id(n) AS id'
+        ,  relationshipQuery:'MATCH (n:城市) -[r:公路连接]- (m) WHERE id(m) <> id(n) AND r.line <> \'G3\' RETURN id(n) AS source, id(m) AS target, r.cost AS weight ORDER BY id(n) ASC, id(m) ASC'
+        , direction:'BOTH'
+        , graph:'cypher'
+      }
+) YIELD nodeId, cost
+RETURN algo.getNodeById(nodeId).name AS station,cost
+
+
+
+// 10.4(1) 搜索从天津到石家庄的最短路径，规则：
+//         - 距离最短
+//         - 包含两个方向
+//         - 返回结果
+
+MATCH (start:城市{name:'天津'}),(end:城市{name:'石家庄'})
+CALL algo.shortestPath.astar.stream(
+  start, end, 'distance', 
+  'latitude','longitude',
+  { defaultValue:1.0 }
+)
+YIELD nodeId, cost
+WITH nodeId, cost
+RETURN algo.getNodeById(nodeId).name AS city
+
+
+
+// 10.5(1) 计算从一个城市出发，到达所有其他城市的最短路径
+//   - 基于成本
+//   - 使用ALGO差异步进算法
+
+MATCH (n:城市 {name:'北京'})
+CALL algo.shortestPath.deltaStepping.stream(n, 'cost',1.0)
+YIELD nodeId, distance
+WITH algo.getNodeById(nodeId) AS destination
+     , distance AS cost
+WHERE NOT destination:公路站点 AND NOT destination:铁路站点
+RETURN destination.name, cost
+ORDER BY cost
+
+
+// 10.6(1) 计算全图中所有节点对之间的最短距离
+//   - 基于跳转次数
+//   - 使用ALGO
+
+CALL algo.allShortestPaths.stream(null) 
+YIELD sourceNodeId, targetNodeId, distance 
+WHERE sourceNodeId < targetNodeId 
+WITH algo.getNodeById(sourceNodeId) AS source
+       ,algo.getNodeById(targetNodeId) AS target
+       ,distance 
+WHERE NOT (source:公路站点 OR source:铁路站点) 
+      AND NOT (target:公路站点 OR target:铁路站点) 
+RETURN source.name, target.name, distance
+ORDER BY distance DESC, source ASC, target ASC
+
+
+// 10.6(2) 计算全图中所有节点对之间的最短距离
+//   - 基于成本
+//   - 使用ALGO
+
+CALL algo.allShortestPaths.stream('cost') 
+YIELD sourceNodeId, targetNodeId, distance 
+WHERE sourceNodeId < targetNodeId 
+WITH algo.getNodeById(sourceNodeId) AS source
+       ,algo.getNodeById(targetNodeId) AS target
+       ,distance AS cost
+WHERE NOT (source:公路站点 OR source:铁路站点) 
+      AND NOT (target:公路站点 OR target:铁路站点) 
+RETURN source.name, target.name, cost
+ORDER BY cost DESC, source ASC, target ASC
+
+
+// 10.7(1) 计算节点对之间的k条最短距离
+//   - 基于跳转次数
+//   - 使用ALGO
+
+
+MATCH (start:Loc{name:'A'}), (end:Loc{name:'F'})
+CALL algo.kShortestPaths(start, end, 3, 'cost' ,{})
+YIELD resultCount
+RETURN resultCount
+
+
+
+// 10.8(1) 计算从一个城市出发到达其他城市的最小生成树
+//   - 基于距离
+//   - 创建新关系MSTALL，并以属性distance保存最短距离
+
+MATCH (n:城市 {name:"北京"}) 
+CALL algo.spanningTree.minimum(
+        "城市", "公路连接|铁路连接", 
+        "distance", id(n), 
+        {write:true, writeProperty:"MSTALL"}
+     )
+YIELD loadMillis,computeMillis,writeMillis,effectiveNodeCount 
+RETURN loadMillis,computeMillis,writeMillis,effectiveNodeCount
+
+
+// 10.8(2) 查看最小生成树，并过滤掉不相关的节点
+
+MATCH p=(a)-[r:MSTALL]->(b) 
+WHERE NOT (b:公路站点 AND size((b) -[:MSTALL]-> ()) = 0) 
+      AND NOT (b:铁路站点 AND size((b) -[:MSTALL]-> ()) = 0)
+RETURN a,r,b
+
+
+
+
+
+
+
+
+

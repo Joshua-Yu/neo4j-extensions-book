@@ -1,0 +1,248 @@
+// ######################################################################
+// 
+// 《Neo4j图数据库扩展指南》
+//
+// 代码示例 - 第4章
+// 
+// 作者：俞方桦，https://www.linkedin.com/in/joshuayu/
+// 最后修改日期：2019-12-29
+//
+// ###################################################################### 
+
+// #########################################################################
+// 
+// 4.2节
+
+
+// 4.2(1) 迭代执行数据库更新查询，直到所有节点都处理完成。
+//  参数：- statement:执行的查询 
+//        - params: {limit:10}
+//  返回结果：任务执行用时和批次
+
+CALL  apoc.periodic.commit(
+    "MATCH (n:人物) WHERE NOT exists(n.genre) WITH n LIMIT {limit} SET n.genre='男' RETURN count(*)",
+    {limit:10}
+)
+
+
+// #########################################################################
+// 
+// 4.3节
+
+// 4.3(1) 迭代执行数据库更新查询，创建人物之间新关系。
+//  参数：- statement1: 返回所有人物节点
+//        - statement2: 搜索2度“父子”关系、并建立新的“爷孙”关系 
+//        - configuration: 批次大小10，并行执行，并发数4
+//  返回结果：任务执行用时和批次信息
+
+CALL apoc.periodic.iterate(
+   "MATCH (n:人物) RETURN n",
+   "MATCH (n)-[:父子*2]->(m) MERGE (n) -[:爷孙]-> (m)",
+   { batchSize:10, 
+     parallel:true, 
+     iterateList:true,
+     concurrency:4
+   }
+)
+
+// #########################################################################
+// 
+// 4.4节
+
+// 4.4(1) 后台/异步执行复杂查询，计算1亿次加法。
+//  参数：- taskName: “Large query”
+//        - statement: 计算1亿次加法 
+
+CALL apoc.periodic.submit('Large query', 
+   'UNWIND range(1,10000) AS a1 UNWIND range(1,10000) AS a2 WITH a1+a2 AS a RETURN sum(a)'
+)
+
+// 4.4(2) 查询后台/异步执行的查询任务的状态。
+//  参数：无。
+
+CALL apoc.periodic.list()
+YIELD name, delay, rate, done, cancelled
+WITH name, done
+WHERE name  = 'Large query'
+RETURN *
+
+// 4.4(3) 终止后台/异步执行的查询任务。
+//  参数：- taskName: “Large query”
+
+CALL apoc.periodic.cancel('Large query')
+
+// #########################################################################
+// 
+// 4.5节
+
+// 4.5(1) 创建用户自定义过程：搜索祖孙关系。
+//  参数：- 过程名: findGrandParents
+//        - statement: 搜索2度“父子”关系 
+//        - mode: READ / 只读
+//        - 输出结果: grandparent/节点, grandson/节点
+//        - 输入参数: name/人物姓名
+
+CALL apoc.custom.asProcedure(
+   'findGrandParents', 
+   'MATCH (n) <-[父子*2]- (m:人物{name:$name}) RETURN n AS grandParent, m AS grandSon',
+   'read',
+   [['grandParent','NODE'],['grandSon','NODE']],
+   [['name','STRING']]
+)
+
+// 4.5(2) 调用用户自定义过程：搜索司马炎的祖孙关系。
+//  
+CALL custom.findGrandParents('司马炎') 
+YIELD grandParent, grandson
+RETURN *
+
+// #########################################################################
+// 
+// 4.6节
+
+// 4.6(1) 读取数据库中所有标签的名称，统计该类标签下节点总数，
+//          返回所有节点数 >0的标签及统计结果。
+//  参数：- fragment: 动态Cypher查询
+//        - params: {limit:0} 
+//    返回：节点计数
+CALL db.labels() YIELD label
+CALL apoc.cypher.run(
+  "MATCH (:`" + label + "`) WITH count(*) AS count WHERE count > {limit} RETURN count", 
+  {limit:0}) YIELD value
+RETURN label, value.count AS count
+
+// 4.6(2) 限定超时执行查询。
+//          计算1亿次加法，超时3秒则终止执行。如果在3秒中执行完成，
+//          结果在value变量中返回。
+//  参数：- fragment: Cypher查询
+//        - params: {}
+//        - timeout: 3000ms 
+//   返回：节点计数
+CALL apoc.cypher.runTimeboxed(
+  'UNWIND range(1,10000) AS a1 UNWIND range(1,10000) AS a2 WITH a1+a2 AS a RETURN sum(a) AS sum',
+  {}, 3000
+) YIELD value
+RETURN value.sum
+
+
+// 4.6(3a) 复制数据库中所有节点，仅包含name属性。
+//          使用apoc.periodic.iterate过程控制执行批次。
+//          在iterate的操作查询中使用apoc.cypher.doIt来创建节点。
+//          新节点的标签来自于已存在的节点的第一个标签。
+//      返回：创建的节点
+CALL apoc.periodic.iterate(
+  'MATCH (n) RETURN n',
+  "CALL apoc.cypher.doIt(\"CREATE (m:\"+ labels(n)[0] + \") SET m.name='\" + n.name + \"'\ RETURN m",{}) YIELD value RETURN value.m",
+  {batchSize:10}
+)
+
+// 4.6(3b) 复制数据库中所有节点，使用Cypher。
+
+MATCH (n) WITH n
+CALL apoc.cypher.doIt(
+  "CREATE (m:" + labels(n)[0] + ") SET m.name='" + n.name + "' RETURN m",
+  {}
+) 
+YIELD value RETURN value.m
+
+// 4.6(3c) 创建节点。
+
+CREATE (m:人物) SET m.name='刘备' RETURN m
+
+
+// 4.6(4) 对查询中类型为数组的变量，并行取出其中元素、初始化和执行查询。
+//          fragment查询中，变量a的类型是数组，包含3个元素。
+//          
+//                     返回：{"b":8}, {"b":9}, {"b":10}。
+CALL  apoc.cypher.parallel(
+  'RETURN $a + 7 as b',{a:[1,2,3]},'a'
+)
+YIELD value 
+RETURN value
+
+// 4.6(5) 根据参数数组中的元素，并行执行查询。
+//          fragment查询中，根据size参数的值生成size个元素的数组。
+//        range(1,3)使得查询可以执行3次。
+// 
+//                     返回：{"b":0},{"b":1},{"b":2},{"b":3},
+//                                 {"b":0},{"b":1},{"b":2},{"b":3},
+//                 {"b":0},{"b":1},{"b":2},{"b":3}
+CALL  apoc.cypher.mapParallel(
+  'UNWIND range(0,$size) as b RETURN b',
+  {size:3},range(1,3)
+)
+YIELD value
+RETURN value
+
+
+// #########################################################################
+// 
+// 4.7节
+
+
+// 4.7(1) 搜索“刘备”节点，并读取其genre属性。
+//          如果属性存在，返回其值；如果不存在，返回“男”。
+MATCH (n:人物{name:'刘备'}) 
+WITH exists(n.genre) AS flag, n.genre AS genre
+CALL apoc.when(flag, 
+  'RETURN $genre AS genre',
+  'RETURN "男" AS genre',
+  {genre:genre}) 
+YIELD value
+RETURN value
+
+
+// 4.7(2) 搜索“刘备”节点，并读取其genre属性。
+//          如果属性存在，返回其值；
+//          如果不存在，则创建该属性，并赋值“男”。
+MATCH (n:人物{name:'刘备'}) 
+WITH exists(n.genre) AS flag, n.genre AS genre, id(n) AS pid
+CALL apoc.do.when(flag, 
+  'RETURN $genre AS genre',
+  'SET n.genre = "男" RETURN "男" AS genre',
+  {genre:genre, pid:pid}) 
+YIELD value
+RETURN value
+
+
+// 4.7(3) 搜索“关羽”节点，并读取其genre属性。
+//          如果属性为“男”，返回1；为“女”，返回0；其他返回-1。
+//          这里，genre属性必须存在，否则会报空指针错误。
+MATCH MATCH (n:人物{name:'关羽'}) 
+WITH n.genre AS genre
+CALL apoc.case([genre='男', 'RETURN 1 AS genre', 
+                genre='女', 'RETURN 0 AS genre' 
+               ],
+  'RETURN -1 AS genre', {}) 
+YIELD value
+RETURN value
+
+
+// 4.7(4) 搜索“关羽”节点，并读取其genre属性。
+//          如果属性为“男”，初始化属性class为1；
+//          为“女”，初始化属性class为2；
+//          其他，初始化class属性为-1。
+//          这里，genre属性必须存在，否则会报空指针错误。
+MATCH MATCH (n:人物{name:'关羽'}) 
+WITH n.genre AS genre,n
+CALL apoc.do.case(
+  [ genre='男', 
+    'WITH $node AS n SET n.class=1 RETURN n', 
+    genre='女', 
+    'WITH $node AS n SET n.class=2 RETURN n'
+  ],
+  'WITH $node AS n SET n.class="-1" RETURN n', 
+  {node:n}
+)
+YIELD value
+RETURN value
+
+
+
+
+
+
+
+
+
+

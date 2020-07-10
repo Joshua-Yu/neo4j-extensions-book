@@ -1,0 +1,204 @@
+// ######################################################################
+// 
+// 《Neo4j图数据库扩展指南》
+// 
+// 代码示例 - 第8章
+// 
+// 作者：俞方桦，https://www.linkedin.com/in/joshuayu/
+// 最后修改日期：2019-12-29
+//
+// ###################################################################### 
+
+
+// #########################################################################
+// 
+// 8.2节
+
+
+// 8.2(1) 返回‘刘备’节点是否拥类型为‘关系’、流出的边。
+
+MATCH (n{name:'刘备'}) 
+WITH n
+RETURN apoc.node.relationship.exists(n,'关系>')
+
+
+// 8.2(2) 根据给定的内部ID列表返回多个节点。
+
+CALL apoc.nodes.get([0, 1, 2]) 
+YIELD node
+RETURN node
+
+
+
+// 8.2(3) 创建两个节点，每个节点有一个标签`人物`，和一个name属性
+//        属性值分别为`马超`和`黄忠`。
+
+CALL apoc.create.nodes(['人物'],[{name:'马超'},{name:'黄忠'}]) YIELD node
+RETURN node
+
+// 8.2(4) 返回‘刘备’节点拥有的所有属性及其值。
+
+MATCH (n:人物{name:'刘备'}) 
+RETURN apoc.any.properties(n)
+
+// 8.2(5) 为‘刘备’节点增加两个额外标签。
+
+MATCH (n:人物{name:'刘备'}) 
+CALL apoc.create.addLabels(n,['皇帝','蜀汉']) 
+YIELD node
+RETURN node
+
+
+// #########################################################################
+// 
+// 8.3节
+
+
+// 8.3(1) 合并从刘备出发的‘兄长关系’路径，和‘主公关系’路径。
+
+MATCH p1 = (n2) <-[:关系{relationship:'兄长'}]- 
+           (n1:人物{name:'刘备'})
+MATCH p2 = (n3:人物{name:'刘备'}) -[:关系{relationship:'主公'}]->
+           (n4)
+RETURN apoc.path.combine(p1,p2)
+
+
+
+// 8.3(2) 寻找从“刘备”出发到“张飞”的关系，以路径对象path返回。
+
+MATCH (a:人物{name:'刘备'}) -[r]-> (b:人物{name:'张飞'})
+WITH a, collect(r) AS rels
+RETURN apoc.path.create(a,rels)
+
+
+
+// 8.3(3) 返回从刘备出发的所有路径。
+//     与MATCH path = (n) -[]-> (m)不同的是，函数返回完整的序列，
+//     而不是[节点，关系，节点]的三元组。
+
+MATCH path = (:人物{name:'刘备'}) -[:关系*]-> ()
+RETURN apoc.path.elements(path)
+
+
+// 8.3(4) 从刘备出发的、长度为2的‘兄长关系’路径中，跳过1段、
+//        截取长度为1的子路径。
+//   返回：完整路径：刘备，[兄长]，关羽，[兄长]，张飞；
+//         截取后的子路径：关羽，[兄长]，张飞。
+
+MATCH path = (:人物{name:'刘备'}) -[:关系*2]-> ()
+RETURN apoc.path.slice(path,1,1)
+
+
+
+// #########################################################################
+// 
+// 8.4节
+
+// 8.4(1) 在“人物”和“皇帝”类节点的name属性中，
+//        搜索“刘备”，使用精确匹配。
+
+CALL apoc.search.node(
+  {人物:'name',皇帝:'name'}, 'exact','刘备'
+)
+YIELD node
+RETURN node
+
+
+// #########################################################################
+// 
+// 8.5节
+
+
+// 8.5(1) 返回天安门广场的地理坐标。
+
+CALL apoc.spatial.geocode('天安门广场')
+YIELD location, latitude, longitude, description
+RETURN * 
+
+
+// 8.5(2) 返回地理坐标对应的地址信息。
+
+CALL apoc.spatial.reverseGeocode(
+   39.905, 116.397
+) 
+YIELD location, latitude, longitude, description
+RETURN * 
+
+
+// #########################################################################
+// 
+// 8.7节
+
+
+// 8.7(1) 生成一个有10万节点、30万条边的ER图。
+//        节点标签为Node，边/关系类型为LINKS。
+//        执行时间：2166ms
+
+CALL apoc.generate.er(100000,300000,'Node', 'LINKS') 
+
+// 8.7(2) 统计生成的图中、节点度的分布。
+
+MATCH (u:Node)
+WITH size ((u) -- ()) AS countOfRels
+WITH countOfRels, count(countOfRels) AS cnt
+RETURN countOfRels, cnt
+ORDER BY countOfRels ASC 
+
+
+// 8.7(3.1) 生成一个有10万节点、30万条边的WS图。
+//        使用不同的beta值：0，0.5和1。
+//  节点标签为Node，边/关系类型为LINKS。
+CALL apoc.generate.ws(100000,4,0,'NodeWS1', 'LINKS1')
+
+// 8.7(3.2) beta = 0.5
+CALL apoc.generate.ws(100000,4,0.5,'NodeWS2', 'LINKS2')
+
+// 8.7(3.3) beta = 1
+CALL apoc.generate.ws(100000,4,1,'NodeWS3', 'LINKS3')
+
+
+// 8.7(4) 生成一个有10万节点、80万条边的BA图。
+//        节点标签为NodeBA，边/关系类型为LINKS4。
+//        执行时间：1872ms
+
+CALL apoc.generate.ba(100000,4,'NodeBA', 'LINKS4') 
+
+// 8.7(5) 统计生成的图中、节点度的分布。
+
+MATCH (u:NodeBA)
+WITH size ((u) -- ()) AS countOfRels
+WITH countOfRels, count(countOfRels) AS cnt
+RETURN countOfRels, cnt
+ORDER BY countOfRels ASC 
+
+
+
+// 8.7(7) 生成一个有10个节点的完全图。
+//        节点标签为NodeCm，边/关系类型为LINKS_CM。
+//        执行时间：10ms
+
+CALL apoc.generate.complete(10,'NodeCm', 'LINKS_CM')
+
+// 8.7(8) 统计生成的图中、节点度的分布。
+
+MATCH (u:NodeCm)
+WITH size ((u) -- ()) AS countOfRels
+WITH countOfRels, count(countOfRels) AS cnt
+RETURN countOfRels, cnt
+ORDER BY countOfRels ASC 
+
+
+// 8.7(9) 生成一个有6个节点的图。
+//        节点标签为NodeSm，边/关系类型为LINKS5。
+
+CALL apoc.generate.simple([2,2,3,3,0,0], 'NodeSm', 'LINKS5')
+
+
+
+
+
+
+
+
+
+

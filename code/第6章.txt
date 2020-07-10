@@ -1,0 +1,280 @@
+// ######################################################################
+// 
+// 《Neo4j图数据库扩展指南》
+// 
+// 代码示例 - 第6章
+// 
+// 作者：俞方桦，https://www.linkedin.com/in/joshuayu/
+// 最后修改日期：2019-12-29
+//
+// ###################################################################### 
+
+// #########################################################################
+// 
+// 6.2节
+
+// 6.2(1) 克隆所有“皇帝”节点
+// 参数：- nodes: 节点数组
+
+MATCH (n:`皇帝`) 
+WITH collect(n) AS nodes
+CALL apoc.refactor.cloneNodes(nodes) 
+YIELD input,output
+RETURN *
+
+// 6.2(2) 克隆所有“皇帝”节点及其关系
+// 参数：- nodes: 节点数组
+
+MATCH (n:`皇帝`) 
+WITH collect(n) AS nodes
+CALL apoc.refactor.cloneNodes(nodes,true) 
+YIELD input,output
+RETURN *
+
+
+// #########################################################################
+// 
+// 6.4节
+
+// 6.4(1) 克隆三国关系图中所有通过“关系”关系连接的节点，
+//        但是不复制“对手”关系、以及相关节点。
+
+MATCH (a:人物) -[r:关系]-> (b:人物)
+WITH collect(a) + collect(b) AS nodes, 
+     collect(r) AS relationships
+CALL apoc.refactor.cloneSubgraph(
+    nodes,
+    [rel in relationships WHERE rel.relationship <> '对手'],
+    {})
+YIELD input, output, error
+RETURN input, output, error
+
+
+// #########################################################################
+// 
+// 6.5节
+
+// 6.5(1) 合并所有“刘备”节点
+// 参数：- nodes: 代表“刘备”的节点数组
+//       - properties:  
+//         - name属性: 仅保留第一关节点的该属性
+//         - genre属性: 使用后面节点的该属性替换
+//         - title属性: 合并所有节点的该属性到字符串数组
+
+MATCH (n:`皇帝`{name:'刘备'})
+WITH n ORDER BY size(keys(n)) DESC 
+WITH collect(n) AS nodes
+CALL apoc.refactor.mergeNodes(
+   nodes, 
+   { properties: 
+      { name:'discard', genre:'overwrite', title:'combine'}
+   }
+) YIELD node
+RETURN node
+
+
+// #########################################################################
+// 
+// 6.6节
+
+// 6.6(1) 返回“刘备”节点和其他节点之间的所有关系。
+//        上节中合并节点后“刘备”与其他节点之间有重复关系。
+ 
+MATCH (n:`皇帝`{name:'刘备'}) -[r]- (n2)
+WITH n,n2,collect(id(r)) AS rels
+RETURN *
+
+// 6.6(2) 在6.6(1)查询结果的基础上合并重复关系
+MATCH (n:`皇帝`{name:'刘备'}) -[r]- (n2)
+WITH n,n2,collect(r) AS rels 
+CALL apoc.refactor.mergeRelationships(rels) 
+YIELD rel
+RETURN n,n2,rel
+
+
+// #########################################################################
+// 
+// 6.7节
+
+
+// 6.7(1) 创建新节点“马超”，并将其与“刘禅”关联
+
+CREATE (n:武将{name:'马超'})
+MERGE (n) <-[:主公]- (n1:皇帝{name:'刘禅'})
+RETURN *
+
+
+// 6.7(2) 将马超的主公重定向到刘备
+
+MATCH (n:武将{name:'马超'}) <-[r:主公]- (n1:皇帝), 
+      (n2:皇帝{name:'刘备'})
+CALL apoc.refactor.from(r,n2)
+YIELD input, output
+RETURN *
+
+// 6.7(3) 现在我们有一个新的“马超”节点，该节点有姓名和性别两个属性
+
+CREATE (n:武将{name:'马超',genre:'男'})
+RETURN *
+
+// 6.7(4) 将(刘备)-[:主公]->(马超)关系重定向到新马超节点
+//        使用对genre属性存在性的判断结果作为筛选条件
+
+MATCH (n:武将{name:'马超'}) 
+WHERE NOT n.genre IS NULL
+MATCH (n1:皇帝{name:'刘备'}) -[r:主公]-> (n2:武将{name:'马超'})
+WITH r,n
+CALL apoc.refactor.to(r,n)
+RETURN *
+
+// #########################################################################
+// 
+// 6.8节
+
+// 6.8(1) 改变刘备和刘禅之间父子关系的方向
+// 参数：- relationship
+
+MATCH (n1:人物{name:'刘备'}) -[r:父子]-> (n2:人物{name:'刘禅'})
+WITH r
+CALL apoc.refactor.invert(r)
+YIELD input,output
+RETURN *
+
+// 6.8(2) 再次改变刘备和刘禅之间父子关系的方向
+// 参数：- relationship
+
+MATCH (n1:人物{name:'刘备'}) <-[r:父子]- (n2:人物{name:'刘禅'})
+WITH r
+CALL apoc.refactor.invert(r)
+YIELD input,output
+RETURN *
+
+// #########################################################################
+// 
+// 6.9节
+
+// 6.9(1) 修改刘备和关羽之间的关系类型为“大哥”。
+
+MATCH (n1:人物{name:'刘备'}) -[r]-> (n2:人物{name:'关羽'})
+CALL apoc.refactor.setType(r,'大哥') 
+YIELD input, output
+RETURN *
+
+// #########################################################################
+// 
+// 6.10节
+
+// 6.10(1) 将(:“皇帝”)-[:建立]->(:“朝代”)关系转换成：
+//         (:“皇帝”)-[:参与]->(:“事件”)-[:关于]->(:“朝代”)
+//         复制“建立”关系的属性到新节点，并增加新属性name=“改朝换代”
+
+MATCH (n1:皇帝) -[r:建立]-> (n2:朝代)
+WITH collect(r) AS rels
+CALL apoc.refactor.extractNode(rels,['事件'],'关于','参与') YIELD input, output
+WITH output
+SET output.name = '改朝换代'
+RETURN *
+
+
+// #########################################################################
+// 
+// 6.11节
+
+// 6.11(1) 将“改朝换代”节点转换成“建立”关系
+
+MATCH (e:事件)
+WHERE e.name = '改朝换代'
+WITH id(e) AS id
+CALL apoc.refactor.collapseNode(id, '建立')
+YIELD input, output
+RETURN *
+
+// #########################################################################
+// 
+// 6.12节
+
+// 6.12(1) 设置“朝代”节点的type属性
+//         - “西晋”：帝国
+//         - 其他：王国
+
+MATCH (d:朝代{name:'西晋'}) 
+SET d.type = '帝国'
+
+// 6.12(2) 设置“朝代”节点的type属性
+//         - 其他：王国
+
+MATCH (d:朝代{name:'西晋'}) 
+WHERE NOT exists(d.type)
+SET d.type = '王国'
+
+// 6.12(3) 将“朝代”节点的type属性标准化为布尔值
+//         - 帝国: true
+//         - 王国: false
+//         - 其他：NULL
+
+MATCH (d:朝代) 
+WITH d
+CALL apoc.refactor.normalizeAsBoolean(
+   d,'type',['帝国'],['王国']
+)
+RETURN n
+
+
+// 6.12(4) 设置刘、关、张的“兄长”关系的type属性为“结拜”
+
+MATCH (n:人物) -[r:兄长]-> (n1)
+WHERE n.name IN ['刘备','关羽']
+SET r.type = '结拜'
+
+// 6.12(5) 设置曹丕、曹植的“兄长”关系的type属性为“血缘”
+
+MATCH (n:人物) -[r:兄长]-> (n1)
+WHERE n.name IN ['曹丕']
+SET r.type = '血缘'
+
+// 6.12(6) 将“兄长”关系的type属性标准化为布尔值
+//         - 血缘: true
+//         - 结拜: false
+//         - 其他：NULL
+
+MATCH (n1:人物) -[r:兄长]-> (n2:人物) 
+WITH r
+CALL apoc.refactor.normalizeAsBoolean(
+   r,'type',['血缘'],['结拜']
+)
+RETURN *
+
+
+// #########################################################################
+// 
+// 6.13节
+
+// 6.13(1) 为刘备和马超添加title属性、且属性值为“左将军”
+
+MATCH (n:`武将`) 
+WHERE n.name IN ['刘备','马超']
+SET n.title = '左将军'
+RETURN n
+
+// 6.13(2) 将title属性转换成新的“职位”节点，并创建“担任”关系
+
+CALL apoc.refactor.categorize(
+   'title','任职',true,'职位','name',[],1
+)
+
+// #########################################################################
+// 
+// 6.14节
+
+// 6.14(1) 修改所有“人物”节点的name属性名为”姓名”。
+//         返回受影响的索引和限制。
+//         如果之前定义了索引：CREATE INDEX ON :人物(name)，那么
+//         该索引会受到影响并返回。
+
+MATCH (n:人物)
+WITH collect(n) AS nodes
+CALL apoc.refactor.rename.nodeProperty('name','姓名',nodes) YIELD constraints, indexes
+RETURN constraints, indexes
+
+
+

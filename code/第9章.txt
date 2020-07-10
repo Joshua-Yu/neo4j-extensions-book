@@ -1,0 +1,194 @@
+// ######################################################################
+// 
+// 《Neo4j图数据库扩展指南》
+// 
+// 代码示例 - 第9章
+// 
+// 作者：俞方桦，https://www.linkedin.com/in/joshuayu/
+// 最后修改日期：2019-12-29
+//
+// ###################################################################### 
+
+
+// #########################################################################
+// 
+// 9.2节
+
+
+// 9.2(1) 创建一个代表“诸葛亮”的虚拟节点。
+//        诸葛亮拥有两个标签：人物、文臣，和两属性：name、title
+//
+
+CALL apoc.create.vNodes(
+  ['人物','文臣'],
+  {name:'诸葛亮',title:'忠武候'}
+)
+YIELD node
+RETURN node
+
+
+// 9.2(2) 创建两个拥有相同标签的虚拟节点：
+//        - 诸葛亮，有属性name和title
+//        - 庞统，有属性name。
+
+CALL apoc.create.vNodes(
+  ['人物','文臣'],
+  [{name:'诸葛亮',title:'忠武候'},{name:'庞统'}]
+)
+YIELD node
+RETURN node
+
+
+
+// 9.2(3) 创建两个拥有相同标签的虚拟节点：
+//        - 诸葛亮，有属性name和title
+//        - 庞统，有属性name
+//        然后创建虚拟关系‘关系’连接这两个节点。
+
+CALL apoc.create.vNodes (
+  ['人物','文臣'],
+  [{name:'诸葛亮',title:'忠武候'},{name:'庞统'}]
+)
+YIELD node
+WITH collect(node) AS nodes
+CALL apoc.create.vRelationship(
+  nodes[0],'关系',{relationship:'同僚'},nodes[1]
+)
+YIELD rel
+RETURN *
+
+// 9.2(4) 在一个实际节点(刘备)和虚拟节点(诸葛亮与庞统)之间创建虚拟关系。
+
+CALL apoc.create.vNodes(
+  ['人物','文臣'],
+  [{name:'诸葛亮',title:'忠武候'},{name:'庞统'}]
+)
+YIELD node
+WITH node
+MATCH (n2:人物{name:'刘备'})
+CALL apoc.create.vRelationship(
+  n2,'关系',{relationship:'主公'},node
+)
+YIELD rel
+RETURN *
+
+
+// 9.2(5) 创建两个拥有相同标签的虚拟节点：
+//        - 诸葛亮，有属性name和title
+//        - 庞统，有属性name
+//        然后创建虚拟关系‘关系’连接这两个节点。
+
+CALL apoc.create.vPattern (
+  {_labels:['人物','文臣'], name:'诸葛亮',title:'忠武候'}, 
+  '关系', 
+  {relationship:'同僚'},
+  {_labels:['人物','文臣'], name:'庞统'}
+) 
+YIELD from, rel, to
+RETURN *
+
+
+// 9.2(6) 创建两个拥有相同标签的虚拟节点：
+
+CALL apoc.create.vPatternFull(
+  ['人物','文臣'], {name:'诸葛亮',title:'忠武候'},
+  '关系', {relationship:'同僚'},
+  ['人物','文臣'], {name:'庞统'}
+) 
+YIELD from, rel, to
+
+
+// 9.2(7) 合并所有“刘备”及其兄弟节点到虚拟节点。
+//        参数：- 保留所有属性
+//              - 统计合并的节点数
+
+MATCH (n:人物{name:'刘备'}) -[:关系{relationship:'兄长'}]-> (m)
+WITH n + collect(m) AS nodes
+CALL apoc.nodes.collapse(nodes,{properties:'combine'})
+YIELD from,rel,to
+RETURN from,rel,to
+
+
+// 9.3(1) 创建一个包含“刘备”及其所有兄弟的虚拟图。
+
+MATCH (n:人物{name:'刘备'}) -[r:关系{relationship:'兄长'}]-> (m)
+CALL apoc.graph.fromData(
+  [n,m],[r],'graph1',{type:'兄弟关系'}
+)
+YIELD graph
+RETURN * 
+
+
+// 9.3(2) 创建一个包含“刘备”及其所有兄弟的虚拟图。
+
+MATCH path = (n:人物{name:'刘备'}) 
+              -[r:关系*1..2{relationship:'兄长'}]-> (m)
+CALL apoc.graph.fromPath(
+  (path,'graph1',{type:'兄弟关系'}
+)
+YIELD graph
+RETURN * 
+
+
+// 9.3(3) 通过执行Cypher查询创建一个包含“刘备”及其所有兄弟的虚拟图。
+//        “刘备”作为查询的参数带入。
+
+CALL apoc.graph.fromCypher(
+  "MATCH (n:人物{name:$name}) -[r:关系*1..2{relationship:'兄长'}]-> (m) RETURN *", 
+  {name:'刘备'}, 'graph1',{type:'兄弟关系'})
+YIELD graph
+RETURN *
+
+
+// 9.3(4) 通过解析JSON文档创建一个包含“刘备”、关羽
+//        及其使用的兵器的虚拟图。
+
+CALL apoc.graph.fromDocument(
+"[{'id': 1,'name': '刘备','type': '人物','title': '昭烈皇帝' },{'id': 2,'name': '关羽','type': '人物','title': '汉寿亭候','使用兵器': [{'id': 3,'name': '青龙偃月刀','type': '兵器'	}]}]",
+  {})
+YIELD graph
+RETURN *
+
+
+// 9.3(5a) 为每个人物节点增加kingdom属性。
+
+MATCH (n:人物) 
+WHERE n.name IN ['刘备','关羽','张飞','赵云','马超','黄忠']
+SET n.kingdom = '蜀汉'
+
+MATCH (n:人物) 
+WHERE n.name IN ['曹操']
+SET n.kingdom = '曹魏'
+
+// 9.3（5b）针对“人物”节点的kingdom属性对图进行汇总操作。
+
+CALL apoc.nodes.group(['人物'],['kingdom'])
+YIELD nodes, relationships
+RETURN *
+
+// 9.4针对“人物”节点的kingdom属性对图进行汇总操作。
+//     使用节点和关系属性汇总操作符。
+
+CALL apoc.nodes.group(
+  ['人物'],['kingdom'],
+  [{kingdom:['count']},{`*`:'count'}]
+) YIELD nodes, relationships
+RETURN *
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+

@@ -1,0 +1,518 @@
+// ######################################################################
+// 
+// 《Neo4j图数据库扩展指南》
+// 
+// 代码示例 - 第5章
+// 
+// 作者：俞方桦，https://www.linkedin.com/in/joshuayu/
+// 最后修改日期：2019-12-29
+//
+// ###################################################################### 
+
+// #########################################################################
+// 
+// 5.2节
+
+// 5.2(1) 导出全库到CSV文件。
+//  文件格式：使用逗号做分隔符；仅在需要时使用引号；文件标题行包含类型。
+//  参数：- file: 文件路径和名称，export/sanguo.txt
+//        - 配置选项: 
+//          - quotes: ifNeeded
+//          - useTypes: true
+
+CALL apoc.export.csv.all(
+   'export/sanguo.txt',
+   { quotes:'ifNeeded',
+     useTypes:true
+   }
+)
+
+
+// 5.2(2) 导出指定节点和关系到CSV文件。
+//  文件格式：使用逗号做分隔符；仅在需要时使用引号；文件标题行包含类型。
+//  参数：- file: 文件路径和名称，export/sanguo2.txt
+//        - 配置选项: 
+//          - quotes: ifNeeded
+//          - useTypes: true
+
+MATCH (n:人物) -[r:主公]-> (m)
+WITH collect(n) + collect(m) AS nodelist, collect(r) AS rels 
+CALL apoc.export.csv.data(
+  nodelist, 
+  rels,
+  'export/sanguo2.txt',
+  {quotes:'ifNeeded',useTypes:true}
+)YIELD file,nodes,relationships,properties,time
+       ,rows,batchSize,batches,done,data
+RETURN file,nodes,relationships,properties,time
+       ,rows,batchSize,batches,done,data
+
+// 5.2(3) 导出一个graph对象的内容到CSV文件。
+//  文件格式：使用逗号做分隔符；仅在需要时使用引号；文件标题行包含类型。
+//  参数：- graph: 一个包含节点、关系和属性的graph对象
+//        - file: 文件路径和名称，export/sanguo_graph.txt
+//        - 配置选项: 
+//          - quotes: ifNeeded
+//          - useTypes: true
+
+CALL apoc.graph.fromCypher(
+   'MATCH (n)-[r:主公]->(m) RETURN * LIMIT $limit',
+   {limit:1},
+   'test graph',
+   {graphId:'graph'}
+) 
+YIELD graph 
+WITH graph
+CALL apoc.export.csv.graph(
+   graph, 
+   'export/sanguo_graph.txt',
+   {quotes:'ifNeeded',useTypes:true}
+)
+YIELD file,nodes,relationships,properties,time
+       ,rows,batchSize,batches,done,data
+RETURN file,nodes,relationships,properties,time
+       ,rows,batchSize,batches,done,data
+
+
+// 5.2(4) 运行Cyper查询并将结果导出到CSV文件。
+//  文件格式：使用逗号做分隔符；节点和关系结构为JSON格式；不使用引号；
+//            文件标题行包含类型。
+//  参数：- query: 查询语句
+//        - file: 文件路径和名称，export/sanguo2.txt
+//        - 配置选项: 
+//          - quotes: none
+//          - useTypes: true
+
+CALL apoc.export.csv.query(
+   'MATCH (n)-[r:主公]->(m) RETURN n,r,m',
+   'export/sanguo_query.txt',
+   {quotes:'none',useTypes:true}
+)
+YIELD file,nodes,relationships,properties,time
+       ,rows,batchSize,batches,done,data
+RETURN file,nodes,relationships,properties,time
+       ,rows,batchSize,batches,done,data
+
+
+// #########################################################################
+// 
+// 5.3节
+	
+// 5.3(1) 导出全库到JSON文件。
+//  文件格式：JSON
+//  参数：- file: 文件路径和名称，export/sanguo.json
+
+CALL apoc.export.json.all(
+   'export/sanguo.json'
+)
+   
+
+// 5.3(2) 导出指定节点和关系到JSON文件。
+//  文件格式：JSON。
+//  参数：- file: 文件路径和名称，export/sanguo2.json
+
+MATCH (n:人物) -[r:主公]-> (m)
+WITH collect(n) + collect(m) AS nodelist, collect(r) AS rels 
+CALL apoc.export.json.data(
+  nodelist, 
+  rels,
+  'export/sanguo2.json',
+  {}
+)YIELD file,nodes,relationships,properties,time
+       ,rows,batchSize,batches,done,data
+RETURN file,nodes,relationships,properties,time
+       ,rows,batchSize,batches,done,data
+
+
+// 5.3(3) 导出一个graph对象的内容到JSON文件。
+//  文件格式：JSON。
+//  参数：- graph: 一个包含节点、关系和属性的graph对象
+//        - file: 文件路径和名称，export/sanguo_graph.json
+
+CALL apoc.graph.fromCypher(
+   'MATCH (n)-[r:主公]->(m) RETURN * LIMIT $limit',
+   {limit:1},
+   'test graph',
+   {graphId:'graph'}
+) 
+YIELD graph 
+WITH graph
+CALL apoc.export.json.graph(
+   graph, 
+   'export/sanguo_graph.json',
+   {quotes:'ifNeeded',useTypes:true}
+)
+YIELD file,nodes,relationships,properties,time
+       ,rows,batchSize,batches,done,data
+RETURN file,nodes,relationships,properties,time
+       ,rows,batchSize,batches,done,data
+
+
+// 5.3(4) 运行Cyper查询并将结果导出到JSON文件。
+//  文件格式：JSON。
+//  参数：- query: 查询语句
+//        - file: 文件路径和名称，export/sanguo_query.json
+
+CALL apoc.export.json.query(
+   'MATCH (n)-[r:主公]->(m) RETURN n,r,m',
+   'export/sanguo_query.json',
+   {quotes:'none',useTypes:true}
+)
+YIELD file,nodes,relationships,properties,time
+       ,rows,batchSize,batches,done,data
+RETURN file,nodes,relationships,properties,time
+       ,rows,batchSize,batches,done,data
+
+	   
+// #########################################################################
+// 
+// 5.4节   
+
+
+// 5.4(1) 导出全库到Cypher文件。
+//  文件格式：Cypher
+//  参数：- file: 文件路径和名称，export/sanguo.cyp
+//        - 配置：全部使用CREATE、不包含BEGIB/COMMIT、批次大小10
+
+CALL apoc.export.cypher.all(
+   'export/sanguo.cyp',
+   { 
+     streamStatements:true,
+     batchSize:10, 
+     cypherFormat:'create', 
+     format:'plain'}
+)
+
+
+// 5.4(2) 导出指定节点和关系到Cypher脚本文件。
+//  文件格式：Cypher
+//  参数：- file: 文件路径和名称，export/sanguo2.cyp
+//        - 配置：全部使用CREATE、不包含BEGIB/COMMIT、批次大小10
+
+MATCH (n:人物) -[r:主公]-> (m)
+WITH collect(n) + collect(m) AS nodelist, collect(r) AS rels 
+CALL apoc.export.cypher.data(
+  nodelist, 
+  rels,
+  'export/sanguo2.cyp',
+  { streamStatements:true,
+    batchSize:10, 
+    cypherFormat:'create', 
+    format:'plain'
+  }
+)
+YIELD file,batches,format,nodes,relationships,
+      properties,time,rows,batchSize
+RETURN file,batches,format,nodes,relationships,
+       properties,time,rows,batchSize
+
+
+// 5.4(3) 导出一个graph对象的内容到Cypher文件。
+//  文件格式：Cypher。
+//  参数：- graph: 一个包含节点、关系和属性的graph对象
+//        - file: 文件路径和名称，export/sanguo_graph.cyp
+//        - 配置：全部使用CREATE、不包含BEGIB/COMMIT、批次大小10
+
+CALL apoc.graph.fromCypher(
+   'MATCH (n)-[r:主公]->(m) RETURN * LIMIT $limit',
+   {limit:1},
+   'test graph',
+   {graphId:'graph'}
+) 
+YIELD graph 
+CALL apoc.export.cypher.graph(
+   graph, 
+   'export/sanguo_graph.cyp',
+  { streamStatements:true,
+    batchSize:10, 
+    cypherFormat:'create', 
+    format:'plain'
+  }
+)
+YIELD file,batches,format,nodes,relationships,
+      properties,time,rows,batchSize
+RETURN file,batches,format,nodes,relationships,
+       properties,time,rows,batchSize 
+
+
+
+// 5.4(4) 运行Cyper查询并将结果导出到Cypher文件。
+//  文件格式：Cypher。
+//  参数：- query: 查询语句
+//        - file: 文件路径和名称，export/sanguo2_cypher.cyp
+//        - 配置：全部使用CREATE、不包含BEGIB/COMMIT、批次大小10、
+//                文件格式cypher-shell。
+
+CALL apoc.export.cypher.query(
+   'MATCH (n)-[r:主公]->(m) RETURN n,r,m',
+   'export/sanguo_query.cyp',
+   { streamStatements:true,
+     batchSize:10, 
+     cypherFormat:'create', 
+     format:'cypher-shell'
+   }
+)
+YIELD file,batches,format,nodes,relationships,
+      properties,time,rows,batchSize
+RETURN file,batches,format,nodes,relationships,
+       properties,time,rows,batchSize 
+
+
+// 5.4(5)导出数据库模式到Cypher文件。
+//  文件格式：Cypher。
+//  参数：- file: 文件路径和名称，export/schema.cyp
+//        - 配置：文件格式cypher-shell。
+
+CALL apoc.export.cypher.schema(
+  'export/schema.cyp',
+  { format:'cyher-shell' }
+)
+
+
+// #########################################################################
+// 
+// 5.5节   
+
+// 5.5(1) 读取CSV文件。
+//  文件格式：逗号分隔的CSV文件。
+//  参数：- file: 文件路径和名称，import/sanguo.csv
+//        - 配置选项: 使用缺省值
+//  返回：自动添加的行号，MAP对象表示的行数据，List对象表示的行数据
+CALL apoc.load.csv(
+   'import/sanguo.csv',
+   {}
+) YIELD lineNo, map, list
+
+
+
+// 5.5(2) 读取CSV文件，并创建节点和关系。
+//  文件格式：逗号分隔的CSV文件。
+//  参数：- file: 文件路径和名称，import/sanguo.csv
+//        - 配置选项: 文件标题行，最大行数，字段类型映射：
+//                    - name：字符串
+//                    - genre：字符串
+//                    - title：字符串，忽略'na’和'无’
+//                    - zi：不导入
+//  对象映射：1) 每行创建“人物”节点
+//            2) weapon中每个元素创建“兵器”节点
+//            3) 创建(:人物) -[:使用]-> (:兵器)关系  
+//  返回：创建的对象计数。
+
+CALL apoc.load.csv(
+   'import/sanguo.csv',
+   { header: true, limit: 10, 
+     mapping:{ name:  {type:'string'},
+               genre: {type:'string'},
+               weapon:{array:true, arraySep:';'},
+               title: {type:'string', nullValues:['na','无']},
+               zi:    {ignore:true}
+     }
+   }
+) YIELD lineNo, map, list
+WITH lineNo, map
+MERGE (n:人物{name:map.name})
+  ON CREATE SET n.genre = map.genre, n.title = map.title
+WITH n,map
+UNWIND map.weapon AS weapon
+MERGE (w:兵器{name:weapon})
+MERGE (n) -[:使用]-> (w)
+RETURN count(*)
+
+
+// #########################################################################
+// 
+// 5.6节   
+
+
+// 5.6(1) 通过stackoverflow API读取最近的关于neo4j的问题和回答。
+//         参数：- url: stackoverflow API及调用参数
+//         返回：问题和回答标题、所有者、创建日期及所有数据项名称
+
+WITH "https://api.stackexchange.com/2.2/questions?pagesize=100&order=desc&sort=creation&tagged=neo4j&site=stackoverflow&filter=!5-i6Zw8Y)4W7vpy91PMYsKM-k9yzEsSC1_Uxlf" AS url
+CALL apoc.load.json(url) 
+YIELD value
+UNWIND value.items AS item
+RETURN item.title, item.owner, item.creation_date, keys(item)
+
+
+// 5.6(2) 通过stackoverflow API读取最近的关于neo4j的问题和回答，应用
+//          JSON Path筛选出accept_rate>50的那些项目。
+//  参数：- url: stackoverflow API及调用参数
+//  返回：问题和回答标题、所有者、创建日期及所有数据项名称。注意因为使用
+//        JSON Path返回items中的每一项，value的内容不再包括items数组。
+
+WITH "https://api.stackexchange.com/2.2/questions?pagesize=100&order=desc&sort=creation&tagged=neo4j&site=stackoverflow&filter=!5-i6Zw8Y)4W7vpy91PMYsKM-k9yzEsSC1_Uxlf" AS url
+CALL apoc.load.json(
+   url,
+   '$.items[?(@.owner.accept_rate>50)]'
+) 
+YIELD  
+RETURN value.title, value.owner, 
+       value.creation_date, keys(value)
+
+
+// #########################################################################
+// 
+// 5.7节   
+
+// 5.7(1) 导入XML文档、使用直接映射创建节点和关系。
+//  参数：- url: 本地XML文档
+//  返回：代表XmlDocument的节点。
+
+CALL apoc.xml.import('books2.xml',{}) 
+YIELD node 
+
+// 5.7(2) 测试由XML文档导入的节点、关系和属性。
+MATCH path = (x:XmlDocument{url:'books2.xml'}) 
+             <-[:IS_CHILD_OF]- (t:XmlTag)
+             <-[:IS_CHILD_OF*]- (t2:XmlTag) 
+             <-[:FIRST_CHILD_OF]- (c:XmlCharacters)
+RETURN path
+
+
+// 5.7(3) 导入XML文档、使用直接映射创建节点和关系。
+//  参数：- url: 本地XML文档
+//        - {configuration}: 指定文本节点的标签名和连接关系类型。说明如下：
+//          - charactersForTag:{简介:'EOT'},在“简介”节点文本内容末尾增加//           一个节点，其text属性值是'EOT'，标签由label选项的值决定。
+//          - label:'文本'，指定所有文本内容节点的标签名为“文本”
+//          - relType:'下一个'，指定连接文本节点的关系名为“下一个”
+//  返回：代表XmlDocument的节点。
+
+CALL apoc.xml.import('books2.xml',
+     { charactersForTag:{简介:'EOT'}, 
+       label:'文本', 
+       relType:'下一个'}
+     }
+) 
+YIELD node 
+
+
+// 5.7(4) 导入XML文档、并转换文档内容到内存对象。
+//  参数：- url: 本地XML文档
+//        - xpath: 仅筛选出文档中价格小于50的书籍节点
+//        - simple: true，使用简单格式
+//  返回：加载到内存的XML文档内容的属性值。
+
+CALL apoc.load.xml(
+         'books2.xml',
+          '/目录/书籍[价格<50]',
+         {},true
+)
+YIELD value AS book
+RETURN book._children[0]._text AS author,
+       book._children[1]._text AS bookname
+
+
+// 5.7(5) 导入XML文档、并转换文档内容到内存对象。
+//  参数：- url: 本地XML文档
+//        - xpath: 仅筛选出文档中价格小于50的书籍节点
+//        - simple: true，使用简单格式
+//  返回：加载到内存的XML文档内容、且仅返回“作者”和“书名”属性值。
+
+CALL apoc.load.xml(
+         'books2.xml',
+          '/目录/书籍[价格<50]',
+         {},true
+)
+YIELD value AS book
+RETURN book.id, 
+  [ attr IN book._children 
+    WHERE attr._type IN 
+       ['作者','书名'] | [attr._type,attr._text]
+  ] AS pairs
+
+
+// #########################################################################
+// 
+// 5.8节 
+
+// 5.8(1) 连接到远程Neo4j数据库，创建节点并返回统计信息。
+//          返回row变量包含执行结果，包括创建/删除的节点、标签、关系等。
+CALL apoc.bolt.execute(
+  "bolt://user:password@localhost:7687",
+  "create(n:Node {name:{name}})", 
+  {name:'Node1'}, 
+  {statistics:true}
+)
+YIELD row
+// 5.8(2) 连接到远程Neo4j数据库，创建节点并返回创建的对象。
+//          返回row变量包含执行结果(MAP结构)。
+CALL apoc.bolt.execute(
+  "bolt://neo4j:123@localhost:7687",
+  "CREATE (n:Person{name:{name}}) return n as node", 
+  {name:'Anne'}
+) YIELD row
+RETURN row.node
+
+// #########################################################################
+// 
+// 5.9节 
+
+// 5.9(1) 注册MySQL数据库驱动。
+//          
+
+CALL apoc.load.driver("com.mysql.jdbc.Driver");
+
+// 5.9(2) 连接到远程MySQL数据库，读取PRODUCTS表中记录并返回结果总数。
+//    
+      
+WITH "jdbc:mysql://localhost:3306/northwind?user=root" AS url
+CALL apoc.load.jdbc(url,"PRODUCTS") YIELD row
+RETURN count(*);
+
+// 5.9(3) 连接到远程MySQL数据库，运行带参数的查询并返回结果
+
+WITH "select firstname, lastname from employees where firstname like ? and lastname like ?" AS sql
+CALL apoc.load.jdbcParams(
+  "northwind", sql, ['Frank%', '%th']
+) YIELD row
+RETURN row
+
+// 5.9(4) 使用批次/多事务提交方式读取远程JDBC数据源内容，
+//           并更新本地图数据库。
+
+CALL apoc.periodic.iterate(
+  'CALL apoc.load.jdbc(
+    "jdbc:mysql://localhost:3306/northwind?user=root", 
+    "company")',
+  'CREATE (p:Person) SET p += row', 
+  {batchSize:10000, parallel:true}
+) YIELD batches, total
+RETURN batches, total
+
+
+// 5.9(5) 执行本地查询，然后将结果写入远程JDBC数据库。
+//           通过param传递SQL更新查询的内容。
+//          
+
+MATCH (u:User)-[:BOUGHT]->(p:Product)<-[:BOUGHT]-(o:User)-[:BOUGHT]->(reco)
+WHERE u <> o AND NOT (u)-[:BOUGHT]->(reco)
+WITH u, reco, count(*) AS score
+WHERE score > 1000
+CALL apoc.load.jdbcUpdate(
+  'jdbc:mysql://localhost:3306/northwind',
+  'INSERT INTO RECOMMENDATIONS values(?,?,?)',
+  [user.id, reco.id, score],
+  { timezone: "Asia/Tokyo", 
+    credentials: {
+      user:'apoc',password:'Ap0c'
+    }
+  }
+) YIELD row;
+
+
+// 5.9(6) 连接到远端JDBC数据源，读取test数据库/模式的元数据。
+//           这里使用PostgreSQL数据源，数据库名mydb，缺省用户名密码。
+
+CALL apoc.model.jdbc(
+  ' jdbc:postgresql://localhost/mydb', 
+  { schema: 'public'}
+) YIELD nodes, relationships
+RETURN *
+
+
+	   
+	   
+	   
+	   
+

@@ -1,0 +1,119 @@
+// ######################################################################
+// 
+// 《Neo4j图数据库扩展指南》
+// 
+// 代码示例 - 第11章
+// 
+// 作者：俞方桦，https://www.linkedin.com/in/joshuayu/
+// 最后修改日期：2019-12-29
+//
+// ###################################################################### 
+
+
+// #########################################################################
+// 
+// 11.2节
+
+
+
+// 11.2(1) 返回图中发现的三角形
+//    - 节点标签：Page，关系类型LINKS
+//    - 使用ALGO过程
+
+CALL algo.triangle.stream('Page','LINKS')
+YIELD nodeA,nodeB,nodeC
+RETURN algo.asNode(nodeA).name AS nodeA,  
+       algo.asNode(nodeB).name AS nodeB, 
+       algo.asNode(nodeC).name AS nodeC
+
+	   
+	   
+// #########################################################################
+// 
+// 11.4节
+
+// 11.4(1) 计算图中连通分量的数量
+//    - 使用ALGO过程
+//    - 关系上面没有权重
+
+CALL algo.unionFind.stream('Page','LINKS')
+YIELD nodeId, setId
+RETURN algo.asNode(nodeId).name, setId
+
+// 11.4(2) 计算图中连通分量的数量
+//    - 使用ALGO过程，结果写入节点属性
+//    - 关系上面没有权重
+//    - 并行操作
+
+CALL algo.unionFind.stream('Page','LINKS',{concurrency:2})
+
+
+// #########################################################################
+// 
+// 11.5节
+
+// 11.5(1) 通过标签传播发现图中的社区
+//    - 使用ALGO过程
+
+CALL algo.labelPropagation.stream(
+  "城市", "公路连接|铁路连接", { iterations: 10 }
+)
+YIELD nodeId, label
+RETURN *
+
+// 11.5(2) 通过标签传播发现图中的社区
+//    - 使用ALGO过程
+//    - 为节点分配新的社区标签
+
+CALL algo.labelPropagation.stream(
+  "城市", "公路连接|铁路连接", { iterations: 10 }
+)
+YIELD nodeId, label
+WITH nodeId, label
+CALL apoc.cypher.doIt('MATCH (n) WHERE id(n) = ' + nodeId + ' SET n:Group_' + label, NULL) 
+YIELD value
+RETURN value
+
+
+CALL algo.unionFind.stream('Page','LINKS',{concurrency:2})
+
+
+// #########################################################################
+// 
+// 11.6节
+
+// 11.6(1) 计算图的Louvain模块度，并返回最终结果
+//    - 使用ALGO过程
+
+CALL algo.louvain.stream('城市', '公路连接|铁路连接')
+YIELD nodeId, community
+RETURN algo.asNode(nodeId).name AS node, community
+ORDER BY community;
+
+
+// 11.6(2) 计算图的Louvain模块度，将最终和中间结果写入节点属性
+//    - 使用ALGO过程
+
+CALL algo.louvain('城市', '公路连接|铁路连接', 
+  {
+   write:true,
+   includeIntermediateCommunities: true,
+   intermediateCommunitiesWriteProperty: 'communities'
+  }
+)
+YIELD nodes, communityCount, iterations, loadMillis,
+      computeMillis, writeMillis
+
+
+// 11.6(3) 查询社区划分结果，并返回结果
+//    - 使用Cypher
+
+MATCH (n:城市)
+RETURN n.communities[-1] AS community, 
+       collect(n.name) AS libraries
+ORDER BY size(libraries) DESC
+
+
+
+
+
